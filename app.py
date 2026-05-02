@@ -64,35 +64,49 @@ if st.button("🚀 Find My Team"):
     # User input
     user_data = [[python, ml, web, ai, comm, lead, db, cgpa]]
 
-    # Transform
+    # Scale
     scaled = scaler.transform(user_data)
+
+    # 🔥 APPLY SAME CGPA WEIGHT
+    scaled[0, -1] = scaled[0, -1] * 3
+
+    # PCA transform
     pca_data = pca.transform(scaled)
 
     # Predict cluster
     cluster = kmeans.predict(pca_data)[0]
 
-    # Assign clusters to dataset
+    # Assign cluster labels to dataset
     df['Cluster'] = kmeans.labels_
 
-    # Filter cluster
+    # Filter same cluster
     cluster_data = df[df['Cluster'] == cluster].copy()
 
-    # Compute distances
+    # Feature transform for dataset
     features = cluster_data.drop(['Student', 'Cluster'], axis=1)
     features_scaled = scaler.transform(features)
+
+    # 🔥 APPLY SAME CGPA WEIGHT TO DATASET
+    features_scaled[:, -1] = features_scaled[:, -1] * 3
+
     features_pca = pca.transform(features_scaled)
 
+    # Distance calculation
     distances = np.linalg.norm(features_pca - pca_data, axis=1)
     cluster_data['Distance'] = distances
 
-    # Get top 3 matches
-    top_matches = cluster_data.sort_values(by='Distance').head(3)
+    # Sort by closest
+    cluster_data = cluster_data.sort_values(by='Distance')
+
+    # Take top 5 → then random 3 (to avoid repetition)
+    top_candidates = cluster_data.head(5)
+    final_matches = top_candidates.sample(n=min(3, len(top_candidates)))
 
     # ------------------ OUTPUT ------------------
     st.write("---")
     st.subheader("🎯 Your Best Teammates")
 
-    for _, row in top_matches.iterrows():
+    for _, row in final_matches.iterrows():
         st.markdown(f"""
         <div class="card">
             <h4>👤 {row['Student']}</h4>
