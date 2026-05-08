@@ -1,117 +1,337 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
+from sklearn.preprocessing import LabelEncoder
+from sklearn.neighbors import NearestNeighbors
 
-# ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="FYP Team Matcher", layout="centered")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(
+    page_title="Smart FYP Team Matcher",
+    page_icon="🎓",
+    layout="centered"
+)
 
-# ------------------ CUSTOM CSS ------------------
+# ---------------- CUSTOM CSS ----------------
 st.markdown("""
-    <style>
-    .main {
-        background-color: #0e1117;
-    }
-    .stButton>button {
-        background-color: #4CAF50;
-        color: white;
-        border-radius: 10px;
-        height: 3em;
-        width: 100%;
-        font-size: 16px;
-    }
-    .card {
-        background-color: #1c1f26;
-        padding: 15px;
-        border-radius: 12px;
-        margin-bottom: 12px;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.4);
-    }
-    </style>
+<style>
+
+.main {
+    background-color: #0E1117;
+}
+
+.stButton>button {
+    background-color: #ff4b4b;
+    color: white;
+    border-radius: 10px;
+    padding: 10px 20px;
+    border: none;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.stButton>button:hover {
+    background-color: #ff2e2e;
+    color: white;
+}
+
+</style>
 """, unsafe_allow_html=True)
 
-# ------------------ LOAD MODELS ------------------
-scaler = joblib.load("scaler.pkl")
-pca = joblib.load("pca.pkl")
-kmeans = joblib.load("kmeans.pkl")
-df = joblib.load("data.pkl")
+# ---------------- LOAD DATA ----------------
+df = pd.read_csv("cs_students.csv")
 
-# ------------------ HEADER ------------------
+# Remove duplicates
+df = df.drop_duplicates()
+
+# ---------------- SKILL MAPPING ----------------
+skill_map = {
+    "Weak": 1,
+    "Average": 2,
+    "Strong": 3
+}
+
+# Encode skills
+df["Python_num"] = df["Python"].map(skill_map)
+df["SQL_num"] = df["SQL"].map(skill_map)
+df["Java_num"] = df["Java"].map(skill_map)
+
+# ---------------- DOMAIN RELATIONSHIPS ----------------
+related_domains = {
+
+    "Machine Learning": [
+        "Artificial Intelligence",
+        "Data Science",
+        "Natural Language Processing",
+        "Computer Vision"
+    ],
+
+    "Artificial Intelligence": [
+        "Machine Learning",
+        "Data Science",
+        "Natural Language Processing",
+        "Computer Vision"
+    ],
+
+    "Web Development": [
+        "Software Development",
+        "Cloud Computing"
+    ],
+
+    "Cloud Computing": [
+        "Web Development",
+        "Distributed Systems"
+    ],
+
+    "Cybersecurity": [
+        "Network Security",
+        "Digital Forensics",
+        "Data Privacy"
+    ]
+}
+
+# ---------------- DOMAIN ENCODING ----------------
+domain_encoder = LabelEncoder()
+
+df["Domain_encoded"] = domain_encoder.fit_transform(
+    df["Interested Domain"]
+)
+
+# ---------------- FEATURE MATRIX ----------------
+features = df[[
+    "GPA",
+    "Domain_encoded",
+    "Python_num",
+    "SQL_num",
+    "Java_num"
+]]
+
+# ---------------- KNN MODEL ----------------
+knn = NearestNeighbors(
+    n_neighbors=6,
+    metric='euclidean'
+)
+
+knn.fit(features)
+
+# ---------------- UI ----------------
 st.title("🎓 Smart FYP Team Matcher")
-st.markdown("### Find your perfect teammates using AI 🤖")
-st.write("---")
 
-# ------------------ INPUT SECTION ------------------
-st.subheader("Enter Your Skills")
+st.markdown(
+    "Find teammates based on GPA, domain & skills"
+)
+
+st.write("")
+
+st.subheader("Enter Your Details")
+
+name = st.text_input("Your Name")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    python = st.slider("Python", 1, 10)
-    ml = st.slider("Machine Learning", 1, 10)
-    web = st.slider("Web Development", 1, 10)
-    ai = st.slider("AI", 1, 10)
+
+    python_skill = st.selectbox(
+        "Python Skill",
+        ["Weak", "Average", "Strong"]
+    )
+
+    sql_skill = st.selectbox(
+        "SQL Skill",
+        ["Weak", "Average", "Strong"]
+    )
+
+    java_skill = st.selectbox(
+        "Java Skill",
+        ["Weak", "Average", "Strong"]
+    )
 
 with col2:
-    comm = st.slider("Communication", 1, 10)
-    lead = st.slider("Leadership", 1, 10)
-    db = st.slider("Database", 1, 10)
-    cgpa = st.slider("CGPA", 1.0, 4.0)
 
-# ------------------ MATCHING LOGIC ------------------
-if st.button("🚀 Find My Team"):
-    
-    # User input
-    user_data = [[python, ml, web, ai, comm, lead, db, cgpa]]
+    gpa = st.slider(
+        "GPA",
+        2.0,
+        4.0,
+        3.0,
+        0.01
+    )
 
-    # Scale
-    scaled = scaler.transform(user_data)
+    domain = st.selectbox(
+        "Interested Domain",
+        sorted(df["Interested Domain"].unique())
+    )
 
-    # 🔥 APPLY SAME CGPA WEIGHT
-    scaled[0, -1] = scaled[0, -1] * 3
+# ---------------- COMPATIBILITY FUNCTION ----------------
+def calculate_compatibility(user, student):
 
-    # PCA transform
-    pca_data = pca.transform(scaled)
+    # -------- DOMAIN SCORE --------
+    if user["domain"] == student["Interested Domain"]:
+        domain_score = 40
 
-    # Predict cluster
-    cluster = kmeans.predict(pca_data)[0]
+    elif (
+        user["domain"] in related_domains
+        and student["Interested Domain"]
+        in related_domains[user["domain"]]
+    ):
+        domain_score = 25
 
-    # Assign cluster labels to dataset
-    df['Cluster'] = kmeans.labels_
+    else:
+        domain_score = 0
 
-    # Filter same cluster
-    cluster_data = df[df['Cluster'] == cluster].copy()
+    # -------- GPA SCORE --------
+    gpa_diff = abs(user["gpa"] - student["GPA"])
 
-    # Feature transform for dataset
-    features = cluster_data.drop(['Student', 'Cluster'], axis=1)
-    features_scaled = scaler.transform(features)
+    gpa_score = max(0, 20 - (gpa_diff * 20))
 
-    # 🔥 APPLY SAME CGPA WEIGHT TO DATASET
-    features_scaled[:, -1] = features_scaled[:, -1] * 3
+    # -------- PYTHON SCORE --------
+    python_diff = abs(
+        user["python"] - student["Python_num"]
+    )
 
-    features_pca = pca.transform(features_scaled)
+    python_score = max(0, 15 - (python_diff * 7))
 
-    # Distance calculation
-    distances = np.linalg.norm(features_pca - pca_data, axis=1)
-    cluster_data['Distance'] = distances
+    # -------- SQL SCORE --------
+    sql_diff = abs(
+        user["sql"] - student["SQL_num"]
+    )
 
-    # Sort by closest
-    cluster_data = cluster_data.sort_values(by='Distance')
+    sql_score = max(0, 15 - (sql_diff * 7))
 
-    # Take top 5 → then random 3 (to avoid repetition)
-    top_candidates = cluster_data.head(5)
-    final_matches = top_candidates.sample(n=min(3, len(top_candidates)))
+    # -------- JAVA SCORE --------
+    java_diff = abs(
+        user["java"] - student["Java_num"]
+    )
 
-    # ------------------ OUTPUT ------------------
+    java_score = max(0, 10 - (java_diff * 5))
+
+    # -------- FINAL SCORE --------
+    total_score = (
+        domain_score +
+        gpa_score +
+        python_score +
+        sql_score +
+        java_score
+    )
+
+    return round(total_score, 2)
+
+# ---------------- FIND TEAM ----------------
+if st.button("🚀 Find Team"):
+
+    # -------- USER VECTOR --------
+    user_vector = np.array([[
+        gpa,
+        domain_encoder.transform([domain])[0],
+        skill_map[python_skill],
+        skill_map[sql_skill],
+        skill_map[java_skill]
+    ]])
+
+    # -------- KNN SEARCH --------
+    distances, indices = knn.kneighbors(user_vector)
+
+    recommended = df.iloc[indices[0]].copy()
+
+    # Remove same user if exists
+    if name.strip() != "":
+        recommended = recommended[
+            recommended["Name"].str.lower()
+            != name.lower()
+        ]
+
+    # -------- USER DATA --------
+    user_data = {
+        "gpa": gpa,
+        "domain": domain,
+        "python": skill_map[python_skill],
+        "sql": skill_map[sql_skill],
+        "java": skill_map[java_skill]
+    }
+
+    # -------- CALCULATE COMPATIBILITY --------
+    recommended["Compatibility"] = recommended.apply(
+        lambda row: calculate_compatibility(
+            user_data,
+            row
+        ),
+        axis=1
+    )
+
+    # -------- SORT RESULTS --------
+    recommended = recommended.sort_values(
+        by="Compatibility",
+        ascending=False
+    )
+
+    # -------- WARNINGS --------
+    exact_match = any(
+        recommended["Interested Domain"] == domain
+    )
+
+    if not exact_match:
+        st.warning(
+            "⚠️ No exact domain match found. Showing related domains."
+        )
+
+   # ---------------- OUTPUT ----------------
+st.write("---")
+
+st.subheader("🎯 Recommended Teammates")
+
+for _, row in recommended.head(5).iterrows():
+
+    compatibility = row["Compatibility"]
+
+    if compatibility >= 70:
+        compatibility_color = "#00ff99"
+    elif compatibility >= 50:
+        compatibility_color = "#ffcc00"
+    else:
+        compatibility_color = "#ff6666"
+
+    card_html = f"""
+<div style="background:#1c1f26;padding:25px;border-radius:18px;margin-bottom:20px;border:1px solid #333;box-shadow:0px 0px 15px rgba(0,0,0,0.3);">
+
+<h2 style="color:white;margin-bottom:15px;">
+👤 {row['Name']}
+</h2>
+
+<p style="font-size:17px;color:#d1d1d1;">
+🎯 <b>Domain:</b> {row['Interested Domain']}
+</p>
+
+<p style="font-size:17px;color:#d1d1d1;">
+📊 <b>GPA:</b> {row['GPA']}
+</p>
+
+<p style="font-size:17px;color:#d1d1d1;">
+💻 <b>Python:</b> {row['Python']}
+&nbsp;&nbsp;&nbsp;
+🗄 <b>SQL:</b> {row['SQL']}
+&nbsp;&nbsp;&nbsp;
+☕ <b>Java:</b> {row['Java']}
+</p>
+
+<div style="margin-top:15px;background:#2a2f3a;border-radius:12px;overflow:hidden;">
+
+<div style="width:{compatibility}%;background:{compatibility_color};padding:10px;color:black;font-weight:bold;text-align:center;">
+
+🤝 Compatibility {compatibility}%
+
+</div>
+
+</div>
+
+</div>
+"""
+
+    st.markdown(card_html, unsafe_allow_html=True)
+
+    # ---------------- ANALYTICS ----------------
     st.write("---")
-    st.subheader("🎯 Your Best Teammates")
 
-    for _, row in final_matches.iterrows():
-        st.markdown(f"""
-        <div class="card">
-            <h4>👤 {row['Student']}</h4>
-            <p>💻 Python: {row['Python']} | 🤖 ML: {row['ML']} | 🌐 Web: {row['Web']}</p>
-            <p>🧠 AI: {row['AI']} | 🗣 Communication: {row['Communication']}</p>
-            <p>📊 CGPA: {row['CGPA']}</p>
-        </div>
-        """, unsafe_allow_html=True)
+    avg_score = recommended["Compatibility"].mean()
+
+    st.info(
+        f"📈 Average Team Compatibility: "
+        f"{round(avg_score, 2)}%"
+    )
