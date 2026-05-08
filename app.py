@@ -19,17 +19,17 @@ st.markdown("""
     background-color: #0E1117;
 }
 
-.stButton>button {
+.stButton > button {
     background-color: #ff4b4b;
     color: white;
     border-radius: 10px;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border: none;
     font-size: 18px;
     font-weight: bold;
 }
 
-.stButton>button:hover {
+.stButton > button:hover {
     background-color: #ff2e2e;
     color: white;
 }
@@ -55,7 +55,7 @@ df["Python_num"] = df["Python"].map(skill_map)
 df["SQL_num"] = df["SQL"].map(skill_map)
 df["Java_num"] = df["Java"].map(skill_map)
 
-# ---------------- DOMAIN RELATIONSHIPS ----------------
+# ---------------- RELATED DOMAINS ----------------
 related_domains = {
 
     "Machine Learning": [
@@ -108,7 +108,7 @@ features = df[[
 # ---------------- KNN MODEL ----------------
 knn = NearestNeighbors(
     n_neighbors=6,
-    metric='euclidean'
+    metric="euclidean"
 )
 
 knn.fit(features)
@@ -272,23 +272,25 @@ if st.button("🚀 Find Team"):
             "⚠️ No exact domain match found. Showing related domains."
         )
 
-   # ---------------- OUTPUT ----------------
-st.write("---")
+    # ---------------- OUTPUT ----------------
+    st.write("---")
 
-st.subheader("🎯 Recommended Teammates")
+    st.subheader("🎯 Recommended Teammates")
 
-for _, row in recommended.head(5).iterrows():
+    for _, row in recommended.head(5).iterrows():
 
-    compatibility = row["Compatibility"]
+        compatibility = row["Compatibility"]
 
-    if compatibility >= 70:
-        compatibility_color = "#00ff99"
-    elif compatibility >= 50:
-        compatibility_color = "#ffcc00"
-    else:
-        compatibility_color = "#ff6666"
+        if compatibility >= 70:
+            compatibility_color = "#00ff99"
 
-    card_html = f"""
+        elif compatibility >= 50:
+            compatibility_color = "#ffcc00"
+
+        else:
+            compatibility_color = "#ff6666"
+
+        card_html = f"""
 <div style="background:#1c1f26;padding:25px;border-radius:18px;margin-bottom:20px;border:1px solid #333;box-shadow:0px 0px 15px rgba(0,0,0,0.3);">
 
 <h2 style="color:white;margin-bottom:15px;">
@@ -324,7 +326,10 @@ for _, row in recommended.head(5).iterrows():
 </div>
 """
 
-    st.markdown(card_html, unsafe_allow_html=True)
+        st.markdown(
+            card_html,
+            unsafe_allow_html=True
+        )
 
     # ---------------- ANALYTICS ----------------
     st.write("---")
